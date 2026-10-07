@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      name="description"
+      content="A glossy, Windows 7 Aero–inspired mind map where ideas float as soap bubbles."
+    />
+    <meta name="theme-color" content="#1d6fbf" />
+    <title>Aero Bubbles — Mind Map</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='g' cx='.5' cy='.58' r='.6'%3E%3Cstop offset='0' stop-color='%23d4efff'/%3E%3Cstop offset='1' stop-color='%231d6fbf'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='32' cy='32' r='29' fill='url(%23g)' stroke='%23fff' stroke-opacity='.85' stroke-width='2'/%3E%3Cellipse cx='32' cy='18' rx='20' ry='11' fill='%23fff' fill-opacity='.6'/%3E%3Ccircle cx='22' cy='15' r='4' fill='%23fff'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <div class="wallpaper" aria-hidden="true">
+      <span class="streak"></span><span class="streak"></span><span class="streak"></span
+      ><span class="streak"></span>
+      <div class="orb a"></div>
+      <div class="orb b"></div>
+    </div>
+
+    <main id="canvas" aria-label="Mind map canvas" aria-describedby="canvas-help"></main>
+    <p id="canvas-help" class="visually-hidden">
+      Use the arrow keys to move between bubbles, Enter to edit, Tab to add a connected bubble and
+      Delete to pop one. Press question mark for every shortcut.
+    </p>
+
+    <header class="toolbar" role="toolbar" aria-label="Mind map tools">
+      <span class="title">
+        <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+          <defs>
+            <radialGradient id="logo-gradient" cx=".5" cy=".58" r=".6">
+              <stop offset="0" stop-color="#d4efff" />
+              <stop offset="1" stop-color="#1d6fbf" />
+            </radialGradient>
+          </defs>
+          <circle
+            cx="32"
+            cy="32"
+            r="29"
+            fill="url(#logo-gradient)"
+            stroke="#fff"
+            stroke-width="3"
+          />
+          <ellipse cx="32" cy="18" rx="20" ry="11" fill="#fff" fill-opacity=".6" />
+          <circle cx="22" cy="15" r="4" fill="#fff" />
+        </svg>
+        <span class="title-text">Aero Bubbles</span>
+      </span>
+      <button type="button" class="btn" data-command="new-bubble">
+        <span data-icon="bubble"></span><span class="btn-label">New bubble</span>
+      </button>
+      <button type="button" class="btn" data-command="connect">
+        <span data-icon="link"></span><span class="btn-label">Connect</span>
+      </button>
+      <span class="separator" aria-hidden="true"></span>
+      <button type="button" class="btn icon-only" data-command="undo">
+        <span data-icon="undo"></span>
+      </button>
+      <button type="button" class="btn icon-only" data-command="redo">
+        <span data-icon="redo"></span>
+      </button>
+      <button type="button" class="btn" data-command="tidy">
+        <span data-icon="wand"></span><span class="btn-label">Tidy</span>
+      </button>
+      <span class="separator" aria-hidden="true"></span>
+      <button type="button" class="btn" id="file-button" aria-controls="file-menu" title="File">
+        <span data-icon="folder"></span><span class="btn-label">File</span>
+      </button>
+      <button type="button" class="btn" data-command="clear">
+        <span data-icon="trash"></span><span class="btn-label">Clear</span>
+      </button>
+      <button type="button" class="btn icon-only" data-command="help">
+        <span data-icon="help"></span>
+      </button>
+    </header>
+
+    <div class="menu" id="file-menu" role="menu" aria-label="File" hidden>
+      <button type="button" class="menu-item" role="menuitem" tabindex="-1" data-command="open">
+        <span data-icon="upload"></span>Open…<kbd></kbd>
+      </button>
+      <button type="button" class="menu-item" role="menuitem" tabindex="-1" data-command="save">
+        <span data-icon="download"></span>Save as JSON<kbd></kbd>
+      </button>
+      <div class="menu-separator" role="separator"></div>
+      <button
+        type="button"
+        class="menu-item"
+        role="menuitem"
+        tabindex="-1"
+        data-command="export-png"
+      >
+        <span data-icon="image"></span>Export PNG image
+      </button>
+      <button
+        type="button"
+        class="menu-item"
+        role="menuitem"
+        tabindex="-1"
+        data-command="export-svg"
+      >
+        <span data-icon="image"></span>Export SVG image
+      </button>
+      <div class="menu-separator" role="separator"></div>
+      <button type="button" class="menu-item" role="menuitem" tabindex="-1" data-command="tutorial">
+        <span data-icon="file"></span>Show the welcome map
+      </button>
+    </div>
+
+    <div class="zoom-controls" role="group" aria-label="Zoom">
+      <button type="button" class="btn" data-command="zoom-out">
+        <span data-icon="minus"></span>
+      </button>
+      <button type="button" class="btn zoom-level" data-command="zoom-reset">100%</button>
+      <button type="button" class="btn" data-command="zoom-in">
+        <span data-icon="plus"></span>
+      </button>
+      <button type="button" class="btn" data-command="zoom-fit">
+        <span data-icon="fit"></span>
+      </button>
+    </div>
+
+    <div id="status"></div>
+
+    <noscript>Aero Bubbles needs JavaScript to blow bubbles.</noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
