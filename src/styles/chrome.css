@@ -1,7 +1,8 @@
 /* ====== Aero glass toolbar ====== */
 .toolbar {
   position: fixed;
-  top: 10px;
+  /* index.html uses viewport-fit=cover: keep clear of notches and home bars. */
+  top: calc(10px + env(safe-area-inset-top, 0px));
   left: 50%;
   translate: -50% 0;
   z-index: 50;
@@ -217,8 +218,8 @@
 /* ====== Zoom controls ====== */
 .zoom-controls {
   position: fixed;
-  right: 14px;
-  bottom: 14px;
+  right: calc(14px + env(safe-area-inset-right, 0px));
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   z-index: 45;
   display: flex;
   align-items: center;
@@ -243,7 +244,7 @@
 /* ====== Status / hint bar ====== */
 .status {
   position: fixed;
-  bottom: 14px;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   translate: -50% 0;
   z-index: 40;
@@ -295,6 +296,6 @@
 
 @media (max-width: 640px) {
   .status {
-    bottom: 64px;
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   }
 }
