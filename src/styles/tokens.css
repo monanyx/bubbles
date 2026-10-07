@@ -1,0 +1,28 @@
+:root {
+  --aero-blue-deep: #0a3b6e;
+  --aero-blue: #1d6fbf;
+  --aero-cyan: #5db2e8;
+  --glass-border: rgba(255, 255, 255, 0.65);
+  --text-dark: #0b3a63;
+  --text-light: #eaf6ff;
+  --focus-ring: 0 0 0 2px #fff, 0 0 0 4px rgba(29, 111, 191, 0.9);
+
+  --font-ui:
+    'Segoe UI', 'Segoe UI Variable', Frutiger, 'Frutiger Linotype', 'Myriad Pro', system-ui,
+    -apple-system, Tahoma, sans-serif;
+
+  /* Glass panel shared by the toolbar, menus and zoom controls. */
+  --glass-panel: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.55) 0%,
+    rgba(220, 240, 255, 0.25) 48%,
+    rgba(160, 205, 240, 0.18) 52%,
+    rgba(200, 230, 255, 0.35) 100%
+  );
+  --glass-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 8px 24px rgba(8, 40, 80, 0.35),
+    0 0 0 1px rgba(20, 80, 140, 0.25);
+
+  /* Set from JS: 1 / zoom, keeps chips a constant on-screen size. */
+  --chip-scale: 1;
+}

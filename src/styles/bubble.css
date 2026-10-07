@@ -1,0 +1,335 @@
+/* ====== THE BUBBLE ====== */
+.bubble {
+  /* Defaults (sky); per-colour values are generated from the palette. */
+  --tint-1: rgba(190, 228, 255, 0.1);
+  --tint-2: rgba(140, 200, 245, 0.16);
+  --tint-3: rgba(90, 160, 220, 0.26);
+  --depth: rgba(40, 110, 180, 0.25);
+  --ink: rgba(8, 45, 90, 0.85);
+  --glow: rgba(130, 215, 255, 0.95);
+
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--d);
+  height: var(--d);
+  margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2);
+  border-radius: 50%;
+  cursor: grab;
+  touch-action: none;
+  outline: none;
+  animation: float-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.bubble:active,
+.is-dragging .bubble {
+  cursor: grabbing;
+}
+.is-connecting .bubble {
+  cursor: pointer;
+}
+
+@keyframes float-in {
+  from {
+    scale: 0.2;
+    opacity: 0;
+  }
+  to {
+    scale: 1;
+    opacity: 1;
+  }
+}
+
+/* The drifting part; its transform is driven from JS so wires can follow. */
+.floaty {
+  position: absolute;
+  inset: 0;
+}
+
+.skin {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    /* big soft specular top-left */
+    radial-gradient(
+      circle at 30% 24%,
+      rgba(255, 255, 255, 0.95) 0%,
+      rgba(255, 255, 255, 0.5) 7%,
+      rgba(255, 255, 255, 0) 22%
+    ),
+    /* small hot spot */
+    radial-gradient(circle at 38% 18%, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0) 6%),
+    /* lower-right secondary reflection */
+    radial-gradient(
+        circle at 74% 82%,
+        rgba(255, 255, 255, 0.5) 0%,
+        rgba(210, 245, 255, 0.18) 9%,
+        rgba(255, 255, 255, 0) 24%
+      ),
+    /* iridescent rim — soap film colours */
+    radial-gradient(
+        circle at 50% 50%,
+        rgba(255, 255, 255, 0) 58%,
+        rgba(173, 255, 235, 0.16) 70%,
+        rgba(255, 190, 240, 0.2) 79%,
+        rgba(150, 210, 255, 0.34) 87%,
+        rgba(255, 255, 255, 0.55) 96%,
+        rgba(255, 255, 255, 0.18) 100%
+      ),
+    /* glass body tint */
+    radial-gradient(circle at 50% 56%, var(--tint-1) 0%, var(--tint-2) 60%, var(--tint-3) 100%);
+  box-shadow:
+    0 1px 1px rgba(255, 255, 255, 0.7) inset,
+    0 -8px 18px var(--depth) inset,
+    0 10px 22px rgba(6, 38, 76, 0.35),
+    0 2px 6px rgba(6, 38, 76, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  transition:
+    box-shadow 0.2s,
+    filter 0.2s;
+  animation: wobble 3.6s ease-in-out infinite;
+}
+
+/* crisp aero top gloss — the Win7 "half shine" */
+.gloss {
+  position: absolute;
+  left: 9%;
+  top: 4%;
+  width: 82%;
+  height: 46%;
+  border-radius: 50% / 58%;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.85) 0%,
+    rgba(255, 255, 255, 0.32) 55%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  opacity: 0.75;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+@keyframes wobble {
+  0%,
+  100% {
+    border-radius: 50%;
+  }
+  25% {
+    border-radius: 51% 49% 50% 50% / 50% 51% 49% 50%;
+  }
+  50% {
+    border-radius: 49% 51% 51% 49% / 51% 49% 50% 51%;
+  }
+  75% {
+    border-radius: 50% 50% 49% 51% / 49% 50% 51% 50%;
+  }
+}
+
+.label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 18%;
+  font-size: var(--fs, 14px);
+  font-weight: 600;
+  line-height: 1.2;
+  color: #fff;
+  text-shadow:
+    0 1px 3px var(--ink),
+    0 0 10px var(--glow);
+  outline: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.label:empty::before {
+  content: 'idea…';
+  opacity: 0.55;
+  font-weight: 400;
+  font-style: italic;
+}
+
+.bubble.is-editing .label {
+  pointer-events: auto;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+  caret-color: #fff;
+}
+.bubble.is-editing .label:empty::before {
+  content: '';
+}
+
+/* ====== states ====== */
+.bubble.is-selected .skin,
+.bubble:focus-visible .skin {
+  box-shadow:
+    0 1px 1px rgba(255, 255, 255, 0.7) inset,
+    0 -8px 18px var(--depth) inset,
+    0 10px 26px rgba(6, 38, 76, 0.4),
+    0 0 0 2px rgba(255, 255, 255, 0.85),
+    0 0 18px 4px var(--glow);
+}
+.bubble.is-dragging .skin {
+  filter: brightness(1.07);
+}
+.bubble.is-link-source .skin,
+.bubble.is-drop-target .skin {
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 160, 0.9),
+    0 0 22px 6px rgba(255, 240, 130, 0.8),
+    0 10px 22px rgba(6, 38, 76, 0.35);
+}
+.is-connecting .bubble:hover .skin {
+  filter: brightness(1.1);
+}
+
+/* pop */
+.bubble.is-popping {
+  pointer-events: none;
+  animation: pop 0.28s ease-out forwards;
+}
+@keyframes pop {
+  0% {
+    scale: 1;
+    opacity: 1;
+  }
+  55% {
+    scale: 1.25;
+    opacity: 0.9;
+  }
+  100% {
+    scale: 1.5;
+    opacity: 0;
+  }
+}
+
+.droplet {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff, #9fd4f7 70%);
+  pointer-events: none;
+  animation: fly 0.5s ease-out forwards;
+}
+@keyframes fly {
+  from {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(0.3);
+  }
+}
+
+/* ====== Action chips around the selected bubble ====== */
+.adornment {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--d);
+  height: var(--d);
+  margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2);
+  pointer-events: none;
+}
+.adornment[hidden],
+.is-dragging .adornment {
+  display: none;
+}
+
+.chip {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  translate: -50% -50%;
+  scale: var(--chip-scale);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 2px 6px rgba(6, 38, 76, 0.4);
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: none;
+  animation: chip-in 0.15s ease-out both;
+}
+.chip .icon {
+  width: 14px;
+  height: 14px;
+}
+.chip:hover {
+  filter: brightness(1.08);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 0 10px rgba(255, 255, 255, 0.9);
+}
+@keyframes chip-in {
+  from {
+    opacity: 0;
+    scale: calc(var(--chip-scale) * 0.5);
+  }
+}
+
+/* Chips sit on the rim at the four diagonals (50% ± 35.36%). */
+.chip-pop {
+  left: 14.645%;
+  top: 14.645%;
+  background: linear-gradient(180deg, #fff3f3, #ffb3b3 50%, #f07575);
+  color: #6b0d0d;
+}
+.chip-link {
+  left: 85.355%;
+  top: 14.645%;
+  background: linear-gradient(180deg, #fdfff0, #ffe98a 50%, #f7c948);
+  color: #5c4500;
+  cursor: crosshair;
+}
+.chip-grow {
+  left: 85.355%;
+  top: 85.355%;
+  background: linear-gradient(180deg, #f0fbff, #a8dcff 50%, #5fb4ef);
+  color: #0b3a63;
+  cursor: nwse-resize;
+}
+.chip-color {
+  left: 14.645%;
+  top: 85.355%;
+  background: linear-gradient(180deg, #f3fff8, #b6f0d3 50%, #5fcf9b);
+  color: #0b4a33;
+}
+
+/* ====== Cut button on a selected wire ====== */
+.link-cut {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -50%;
+  background: linear-gradient(180deg, #fff3f3, #ffb3b3 50%, #f07575);
+  color: #6b0d0d;
+}
+.link-cut[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble,
+  .skin,
+  .chip,
+  .temp-wire {
+    animation: none;
+  }
+}
