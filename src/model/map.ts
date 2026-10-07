@@ -21,6 +21,7 @@ export function clipText(text: string, max: number): string {
   return /[\uD800-\uDBFF]$/.test(clipped) ? clipped.slice(0, -1) : clipped;
 }
 
+/** Idempotent: normalising twice gives the same text (clipping can expose trailing space). */
 export const normalizeText = (text: string): string =>
   clipText(
     text
@@ -28,7 +29,7 @@ export const normalizeText = (text: string): string =>
       .replace(/\n{3,}/g, '\n\n')
       .trim(),
     MAX_TEXT_LENGTH,
-  );
+  ).trimEnd();
 
 export function emptyMap(): MindMap {
   return { nodes: new Map(), links: new Map() };

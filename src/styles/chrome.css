@@ -220,10 +220,12 @@
     0 2px 6px rgba(6, 38, 76, 0.35);
 }
 .swatch[aria-checked='true']:focus-visible {
+  /* The focus ring sits outside the checked ring, not hidden beneath it. */
   box-shadow:
     0 0 0 2px #fff,
     0 0 0 4px var(--swatch),
-    var(--focus-ring);
+    0 0 0 6px #fff,
+    0 0 0 8px rgba(29, 111, 191, 0.9);
 }
 
 /* ====== Zoom controls ====== */

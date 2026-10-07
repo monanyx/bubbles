@@ -64,6 +64,11 @@ export class ColorPopover {
     this.returnFocus = null;
   }
 
+  destroy(): void {
+    this.close();
+    this.el.remove();
+  }
+
   private pick(color: ColorId): void {
     const onPick = this.onPick;
     this.close();

@@ -26,6 +26,18 @@ export class MenuButton {
       }
     });
     menu.addEventListener('keydown', this.onMenuKey);
+    // Close when focus moves to another control (toolbar arrows, Tab from a
+    // mouse-opened menu). A focus loss with no destination is left to the
+    // outside-click handler: Safari doesn't focus clicked buttons, so treating
+    // it as "left" would close the menu before a click on an item lands.
+    const onFocusOut = (e: FocusEvent): void => {
+      const next = e.relatedTarget as Node | null;
+      if (next && !this.menu.contains(next) && !this.button.contains(next)) this.close();
+    };
+    menu.addEventListener('focusout', onFocusOut);
+    button.addEventListener('focusout', (e) => {
+      if (this.isOpen) onFocusOut(e);
+    });
     menu.addEventListener('click', (e) => {
       if (e.target instanceof Element && e.target.closest('[role="menuitem"]')) this.close(true);
     });
@@ -75,6 +87,9 @@ export class MenuButton {
   }
 
   private readonly onMenuKey = (e: KeyboardEvent): void => {
+    // Keys pressed in an open menu belong to it: global shortcuts (Delete, N…)
+    // must not act on the canvas behind it. Tab still moves focus normally.
+    if (e.key !== 'Tab') e.stopPropagation();
     const index = this.items.indexOf(document.activeElement as HTMLElement);
     const move = (to: number, step: 1 | -1): void => {
       e.preventDefault();

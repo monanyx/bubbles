@@ -39,8 +39,16 @@ const ZOOM_STEP = 1.25;
 
 export interface Commands {
   map: CommandMap;
-  /** Instantly completes any running animation (before other input). */
+  /**
+   * Completes running animations and in-progress gestures (see
+   * {@link onSettle}) so the next document change applies on top of them.
+   * Every command runs this first.
+   */
   settle(): void;
+  /** Completes running animations only (for pointer input starting a gesture). */
+  settleAnimations(): void;
+  /** Registers extra work for {@link settle}, e.g. finishing a drag. */
+  onSettle(fn: () => void): void;
   /** Smoothly pans so a bubble is comfortably on screen. */
   reveal(id: NodeId): void;
   fitToContent(animated?: boolean): void;
@@ -53,9 +61,14 @@ export function createCommands(ctx: AppContext): Commands {
   let tidyAnimation: Animation | null = null;
   let viewAnimation: Animation | null = null;
 
-  const settle = (): void => {
+  const settlers: (() => void)[] = [];
+  const settleAnimations = (): void => {
     tidyAnimation?.finish();
     viewAnimation?.finish();
+  };
+  const settle = (): void => {
+    for (const fn of settlers) fn();
+    settleAnimations();
   };
 
   const center = (): Vec => {
@@ -140,6 +153,7 @@ export function createCommands(ctx: AppContext): Commands {
     if (next !== null && editor.map.nodes.has(next)) {
       editor.select([next]);
       scene.focusBubble(next);
+      reveal(next); // never act on a bubble the user can't see
     } else {
       scene.root.focus({ preventScroll: true });
     }
@@ -273,18 +287,29 @@ export function createCommands(ctx: AppContext): Commands {
       run: () => {
         const before = editor.map;
         const targets = tidyPositions(editor);
+        // `last` is the frame we previewed. If the map is anything else, someone
+        // else changed it mid-animation (e.g. another tab's update was adopted):
+        // stop without previewing or committing over their change.
+        let last = before;
+        let cancelled = false;
         tidyAnimation = animate(
           500,
           (t) => {
+            if (cancelled || editor.map !== last) {
+              cancelled = true;
+              return;
+            }
             const positions = new Map<NodeId, Vec>();
             for (const [id, b] of before.nodes) {
               const to = targets.get(id) ?? b;
               positions.set(id, { x: b.x + (to.x - b.x) * t, y: b.y + (to.y - b.y) * t });
             }
-            editor.preview(setPositions(before, positions));
+            last = setPositions(before, positions);
+            editor.preview(last);
           },
           () => {
             tidyAnimation = null;
+            if (cancelled || editor.map !== last) return;
             editor.commitFrom(before);
             status.toast('Tidied up', { action: undoAction() });
           },
@@ -389,13 +414,17 @@ export function createCommands(ctx: AppContext): Commands {
   return {
     map,
     settle,
+    settleAnimations,
+    onSettle: (fn) => settlers.push(fn),
     reveal,
     fitToContent,
     popBubble: (id) => {
+      settle();
       editor.select([id]);
       removeWithToast();
     },
     cutLink: (id) => {
+      settle();
       editor.select([], [id]);
       removeWithToast();
     },

@@ -21,7 +21,11 @@ export class StatusBar {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private action: ToastAction | undefined;
 
-  constructor(private readonly el: HTMLElement) {
+  constructor(
+    private readonly el: HTMLElement,
+    /** Where focus goes if the action button is hidden while focused. */
+    private readonly fallbackFocus: () => void = () => undefined,
+  ) {
     el.classList.add('status');
     el.setAttribute('role', 'status');
     el.setAttribute('aria-live', 'polite');
@@ -60,7 +64,7 @@ export class StatusBar {
   dropAction(): void {
     if (!this.action) return;
     this.action = undefined;
-    this.button.hidden = true;
+    this.hideButton();
   }
 
   get message(): string {
@@ -71,7 +75,15 @@ export class StatusBar {
     clearTimeout(this.timer);
     this.timer = undefined;
     this.action = undefined;
+    this.hideButton();
     this.render(this.hintText, undefined, false);
+  }
+
+  /** Hides the action button without dropping keyboard focus to <body>. */
+  private hideButton(): void {
+    const hadFocus = document.activeElement === this.button;
+    this.button.hidden = true;
+    if (hadFocus) this.fallbackFocus();
   }
 
   private render(message: string | null, actionLabel: string | undefined, toast: boolean): void {

@@ -17,14 +17,17 @@ const ACTS_ON_BUBBLE = new Set(['Enter', 'F2', 'Delete', 'Backspace', ' ']);
 export interface BubbleKeyHooks {
   connected(ok: boolean): void;
   reveal(id: NodeId): void;
+  /** Finish animations and gestures before changing the document. */
+  settle(): void;
 }
 
 /**
  * Makes keyboard focus and selection agree. A bubble can hold focus without
  * being selected (Tab onto the canvas, or after Escape); keys pressed on it
  * then act on it instead of falling through to "nothing selected" behaviour.
- * In connect mode, arrows move focus between bubbles and Enter/Space picks
- * the source and then the target — so connecting needs no pointer.
+ * In connect mode, arrows move focus between bubbles and Enter picks the
+ * source and then the target — so connecting needs no pointer. (Space stays
+ * free for hold-Space-to-pan.)
  *
  * Runs on the bubble layer, before the window-level shortcut dispatcher.
  */
@@ -45,9 +48,12 @@ export function bindBubbleKeys(scene: Scene, editor: Editor, hooks: BubbleKeyHoo
           scene.focusBubble(next);
           hooks.reveal(next);
         }
-      } else if (e.key === 'Enter' || e.key === ' ') {
+      } else if (e.key === 'Enter') {
         e.preventDefault();
         e.stopPropagation();
+        // Holding Enter must not flip between connect, re-pick and clear.
+        if (e.repeat) return;
+        hooks.settle();
         const pick = pickConnectTarget(editor, id);
         if (pick === 'connected' || pick === 'exists') hooks.connected(pick === 'connected');
       }

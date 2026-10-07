@@ -41,7 +41,6 @@ export function renderSvg(map: MindMap, options: SvgOptions = {}): RenderedSvg |
   const y = Math.floor(box.y - padding);
   const width = Math.ceil(box.width + padding * 2);
   const height = Math.ceil(box.height + padding * 2 + 12);
-  const region = `filterUnits="userSpaceOnUse" x="${x}" y="${y}" width="${width}" height="${height}"`;
 
   const bubbles = [...map.nodes.values()];
   const colors = new Set<ColorId>(bubbles.map((b) => b.color));
@@ -54,7 +53,6 @@ export function renderSvg(map: MindMap, options: SvgOptions = {}): RenderedSvg |
     ellipseGradient('bg-deep', 0.95, 0.95, 0.7, 0.6, [20, 90, 170], 0.7, 0.65),
     // Wires
     `<linearGradient id="wire" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".5" stop-color="rgb(150,220,255)" stop-opacity=".85"/><stop offset="1" stop-color="#fff" stop-opacity=".9"/></linearGradient>`,
-    `<filter id="wire-shadow" ${region}><feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="rgb(8,40,80)" flood-opacity=".4"/></filter>`,
     // Bubble layers shared by every colour (CSS farthest-corner radii)
     radial('spec', 0.3, 0.24, 1.0332, [
       [0, 'rgba(255,255,255,.95)'],
@@ -116,25 +114,29 @@ export function renderSvg(map: MindMap, options: SvgOptions = {}): RenderedSvg |
     );
   }
 
-  const cores: string[] = [];
-  const glows: string[] = [];
+  // Each wire keeps its own shadow, drawn core-then-glow like on screen (so
+  // crossings match), but over a small region around that wire only: a
+  // nearly flat arc has a tiny bounding box, so the region is padded in user
+  // space rather than as a percentage. 8px covers the 2px offset + 3σ blur.
+  const wires: string[] = [];
   for (const link of map.links.values()) {
     const a = map.nodes.get(link.a);
     const b = map.nodes.get(link.b);
     if (!a || !b) continue;
     const g = linkGeometry({ x: a.x, y: a.y, r: a.d / 2 }, { x: b.x, y: b.y, r: b.d / 2 });
     if (!g.visible) continue;
-    cores.push(
-      `<path d="${g.path}" fill="none" stroke="url(#wire)" stroke-width="3" stroke-linecap="round"/>`,
+    const id = `ws${wires.length}`;
+    const pad = 8;
+    const box = g.bounds;
+    defs.push(
+      `<filter id="${id}" filterUnits="userSpaceOnUse" x="${num(box.x - pad)}" y="${num(box.y - pad)}" width="${num(box.width + pad * 2)}" height="${num(box.height + pad * 2)}">` +
+        `<feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="rgb(8,40,80)" flood-opacity=".4"/></filter>`,
     );
-    glows.push(
-      `<path d="${g.path}" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1" stroke-linecap="round"/>`,
+    wires.push(
+      `<path d="${g.path}" fill="none" stroke="url(#wire)" stroke-width="3" stroke-linecap="round" filter="url(#${id})"/>` +
+        `<path d="${g.path}" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1" stroke-linecap="round"/>`,
     );
   }
-  // One shadow pass for all wires instead of one full-canvas pass per wire.
-  const wires = cores.length
-    ? `<g filter="url(#wire-shadow)">${cores.join('')}</g><g>${glows.join('')}</g>`
-    : '';
 
   const shapes = bubbles.map((bubble, i) => {
     const { mask, body } = renderBubble(bubble, i, measure);
@@ -153,7 +155,7 @@ export function renderSvg(map: MindMap, options: SvgOptions = {}): RenderedSvg |
 
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${x} ${y} ${width} ${height}" font-family="${escapeAttr(FONT_STACK)}">` +
-    `<defs>${defs.join('')}</defs>${backdrop}${wires}<g>${shapes.join('')}</g></svg>`;
+    `<defs>${defs.join('')}</defs>${backdrop}<g>${wires.join('')}</g><g>${shapes.join('')}</g></svg>`;
 
   return { svg, width, height };
 }

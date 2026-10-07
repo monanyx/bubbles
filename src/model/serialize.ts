@@ -93,14 +93,17 @@ export function deserialize(input: unknown): LoadedMap {
   }
 
   const nodes = new Map<string, Bubble>();
+  /** Raw id in the file → id actually assigned (first occurrence wins). */
+  const resolved = new Map<string, string>();
   for (const raw of data.nodes) {
     if (!isRecord(raw)) continue;
     const x = finite(raw.x);
     const y = finite(raw.y);
     if (x === null || y === null) continue;
-    let id =
-      typeof raw.id === 'string' && raw.id.length > 0 ? raw.id.slice(0, MAX_ID_LENGTH) : nodeId();
+    const rawId = typeof raw.id === 'string' && raw.id.length > 0 ? raw.id : null;
+    let id = rawId?.slice(0, MAX_ID_LENGTH) ?? nodeId();
     if (nodes.has(id)) id = nodeId();
+    if (rawId !== null && !resolved.has(rawId)) resolved.set(rawId, id);
     nodes.set(id, {
       id,
       x: clampCoord(x),
@@ -117,10 +120,11 @@ export function deserialize(input: unknown): LoadedMap {
   const pairs = new Set<string>();
   for (const raw of Array.isArray(data.links) ? data.links : []) {
     if (!isRecord(raw) || typeof raw.a !== 'string' || typeof raw.b !== 'string') continue;
-    // Node ids were clipped the same way, so long ids still match up.
-    const a = raw.a.slice(0, MAX_ID_LENGTH);
-    const b = raw.b.slice(0, MAX_ID_LENGTH);
-    if (a === b || !nodes.has(a) || !nodes.has(b)) continue;
+    // Resolve through the ids actually assigned: clipped or re-keyed nodes
+    // keep their links, and ids sharing a long prefix can't be confused.
+    const a = resolved.get(raw.a);
+    const b = resolved.get(raw.b);
+    if (a === undefined || b === undefined || a === b) continue;
     const pair = a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`;
     if (pairs.has(pair)) continue;
     pairs.add(pair);

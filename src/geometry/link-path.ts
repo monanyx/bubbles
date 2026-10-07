@@ -1,4 +1,4 @@
-import type { Vec } from '../model/types';
+import type { Rect, Vec } from '../model/types';
 
 export interface Circle {
   readonly x: number;
@@ -13,6 +13,8 @@ export interface LinkGeometry {
   readonly mid: Vec;
   /** False when the bubbles overlap and there is no wire left to draw. */
   readonly visible: boolean;
+  /** Box around the curve's control points (which always contain the curve). */
+  readonly bounds: Rect;
 }
 
 const MIN_GAP = 6;
@@ -32,7 +34,9 @@ export function linkGeometry(a: Circle, b: Circle): LinkGeometry {
   const dist = Math.hypot(dx, dy);
   const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   const span = dist - a.r - b.r;
-  if (span < MIN_GAP) return { path: '', mid, visible: false };
+  if (span < MIN_GAP) {
+    return { path: '', mid, visible: false, bounds: { ...mid, width: 0, height: 0 } };
+  }
 
   let nx = -dy / dist;
   let ny = dx / dist;
@@ -49,7 +53,16 @@ export function linkGeometry(a: Circle, b: Circle): LinkGeometry {
     path: `M${fmt(s.x)} ${fmt(s.y)}Q${fmt(c.x)} ${fmt(c.y)} ${fmt(e.x)} ${fmt(e.y)}`,
     mid: { x: 0.25 * s.x + 0.5 * c.x + 0.25 * e.x, y: 0.25 * s.y + 0.5 * c.y + 0.25 * e.y },
     visible: true,
+    bounds: hull([s, c, e]),
   };
+}
+
+function hull(points: Vec[]): Rect {
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
 }
 
 /** Point on the circle's rim facing `target`. */

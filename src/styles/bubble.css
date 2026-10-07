@@ -17,7 +17,6 @@
   border-radius: 50%;
   cursor: grab;
   touch-action: none;
-  outline: none;
   animation: float-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
 }
 .bubble:active,

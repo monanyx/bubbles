@@ -52,3 +52,26 @@ test('pinch zooms the canvas @touch', async ({ page }) => {
     .poll(async () => parseInt((await zoom.textContent()) ?? '0', 10))
     .toBeGreaterThan(start * 1.5);
 });
+
+test('a second finger never restores a bubble deleted mid-touch @touch', async ({ page }) => {
+  const tip = bubble(page, 'Press ?');
+  await tip.tap();
+  await expect(tip).toHaveAttribute('aria-selected', 'true');
+
+  const cdp = await page.context().newCDPSession(page);
+  const hold = await center(bubble(page, 'Big idea'));
+  const finger = { x: hold.x, y: hold.y, id: 0 };
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [finger] });
+  await page.keyboard.press('Delete'); // pops the selected tip while a finger is down
+  await expect(bubbles(page)).toHaveCount(3);
+
+  // A second finger turns the press into a pinch, which reverts the gesture's
+  // own preview — it must not roll back the newer delete.
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [finger, { x: 60, y: 120, id: 1 }],
+  });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect(bubbles(page)).toHaveCount(3);
+  await expect(bubble(page, 'Press ?')).toHaveCount(0);
+});

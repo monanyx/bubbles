@@ -64,16 +64,21 @@ export class HelpDialog {
         .map((k) => `<kbd>${escapeHtml(displayCombo(k))}</kbd>`)
         .join(' ');
 
-    const extraBubbleRows =
-      '<dt><kbd>1</kbd>–<kbd>6</kbd></dt><dd>Colour the selected bubbles</dd>' +
-      '<dt><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd></dt><dd>Hop between bubbles (Shift: nudge)</dd>';
+    const extraRows: Record<string, string> = {
+      Bubbles:
+        '<dt><kbd>1</kbd>–<kbd>6</kbd></dt><dd>Colour the selected bubbles</dd>' +
+        '<dt><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd></dt><dd>Hop between bubbles (Shift: nudge)</dd>',
+      'Connections & layout':
+        '<dt><kbd>C</kbd>, then <kbd>←</kbd> <kbd>→</kbd> and <kbd>Enter</kbd></dt>' +
+        '<dd>Connect without a mouse: move to a bubble, press Enter, move to its partner, press Enter</dd>',
+    };
 
     const shortcutRows = SECTIONS.map(
       ({ title, commands }) => `
         <h3>${title}</h3>
         <dl class="shortcuts">
           ${commands.map((id) => `<dt>${keysFor(id)}</dt><dd>${escapeHtml(this.labelFor(id))}</dd>`).join('')}
-          ${title === 'Bubbles' ? extraBubbleRows : ''}
+          ${extraRows[title] ?? ''}
         </dl>`,
     ).join('');
 

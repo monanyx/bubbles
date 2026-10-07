@@ -58,6 +58,13 @@ describe('normalizeText / clampDiameter', () => {
     expect(clipText('short', 200)).toBe('short');
   });
 
+  it('normalises idempotently, even when clipping exposes trailing space', () => {
+    for (const text of [`${'a'.repeat(199)} b`, `${'a'.repeat(198)} 🎉x`, '  x  ', 'a\n\n\n\nb']) {
+      const once = normalizeText(text);
+      expect(normalizeText(once)).toBe(once);
+    }
+  });
+
   it('clamps and rounds diameters', () => {
     expect(clampDiameter(10)).toBe(MIN_DIAMETER);
     expect(clampDiameter(1e9)).toBe(MAX_DIAMETER);

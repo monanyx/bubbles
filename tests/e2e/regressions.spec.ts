@@ -21,19 +21,25 @@ test('text typed but not yet confirmed survives a reload', async ({ page }) => {
   await expect(bubble(page, 'Buy milk')).toHaveCount(1);
 });
 
-test('undo during a drag is not overwritten when the drag ends', async ({ page }) => {
+test('undo during a drag cancels the drag and keeps history intact', async ({ page }) => {
   await selectOnly(page, bubble(page, 'Press ?'));
   await page.keyboard.press('Delete');
   await expect(bubbles(page)).toHaveCount(3);
 
-  const from = await center(bubble(page, 'Big idea'));
+  const root = bubble(page, 'Big idea');
+  const from = await center(root);
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
   await page.mouse.move(from.x + 40, from.y + 40, { steps: 5 });
-  await page.keyboard.press('ControlOrMeta+z'); // restores the popped tip
+  // The drag is committed as its own step, so this undo reverts the drag…
+  await page.keyboard.press('ControlOrMeta+z');
   await page.mouse.move(from.x + 80, from.y + 80, { steps: 5 });
   await page.mouse.up();
+  await expect.poll(async () => (await center(root)).x).toBeCloseTo(from.x, 0);
+  await expect(bubbles(page)).toHaveCount(3);
 
+  // …and the earlier pop is still one undo away (previously it was lost).
+  await page.keyboard.press('ControlOrMeta+z');
   await expect(bubble(page, 'Press ?')).toHaveCount(1);
   await expect(bubbles(page)).toHaveCount(4);
 });

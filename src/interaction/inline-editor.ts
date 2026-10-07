@@ -1,7 +1,7 @@
 import { addChild, setText } from '../core/actions';
 import type { Editor, EditorState } from '../core/editor';
-import { clipText, MAX_TEXT_LENGTH, normalizeText } from '../model/map';
-import type { NodeId } from '../model/types';
+import { clipText, MAX_TEXT_LENGTH, normalizeText, updateBubble } from '../model/map';
+import type { MindMap, NodeId } from '../model/types';
 import type { Scene } from '../view/scene';
 
 /**
@@ -14,7 +14,17 @@ import type { Scene } from '../view/scene';
  * listeners must commit the draft before Autosave's listeners flush.
  */
 export class InlineEditor {
-  private active: { id: NodeId; label: HTMLElement } | null = null;
+  private active: {
+    id: NodeId;
+    label: HTMLElement;
+    /** The text when editing began: only a change from it is the user's. */
+    original: string;
+    /**
+     * Saved-but-unconfirmed text (page hidden mid-edit), shown as a preview so
+     * it autosaves without adding undo steps. `base` is the map before it.
+     */
+    draft: { base: MindMap; last: MindMap } | null;
+  } | null = null;
   private readonly unsubscribe: () => void;
 
   constructor(
@@ -37,13 +47,21 @@ export class InlineEditor {
     document.removeEventListener('visibilitychange', this.onVisibility);
   }
 
-  /** Saves what has been typed so far without leaving edit mode. */
+  /**
+   * Saves what has been typed so far without leaving edit mode or adding an
+   * undo step: it is previewed (so Autosave writes it) and folded into the
+   * single step recorded when editing ends.
+   */
   private readonly commitDraft = (): void => {
     const active = this.active;
-    const bubble = active && this.editor.map.nodes.get(active.id);
-    if (!active || !bubble) return;
+    if (!active?.label.isConnected) return;
     const text = normalizeText(active.label.innerText);
-    if (text !== bubble.text) setText(this.editor, active.id, text);
+    const map = this.editor.map;
+    const current = map.nodes.get(active.id);
+    if (!current || text === active.original || text === current.text) return;
+    const last = updateBubble(map, active.id, { text });
+    active.draft = { base: active.draft?.last === map ? active.draft.base : map, last };
+    this.editor.preview(last);
   };
 
   private readonly onVisibility = (): void => {
@@ -62,7 +80,7 @@ export class InlineEditor {
     const view = this.scene.bubbleView(id);
     if (!view) return;
     const { label } = view;
-    this.active = { id, label };
+    this.active = { id, label, original: view.bubble.text, draft: null };
 
     try {
       label.contentEditable = 'plaintext-only';
@@ -101,7 +119,16 @@ export class InlineEditor {
     const bubble = this.editor.map.nodes.get(id);
     if (!bubble) return;
     const text = normalizeText(label.innerText);
-    if (text !== bubble.text) setText(this.editor, id, text);
+    const { draft, original } = active;
+    if (draft?.last === this.editor.map) {
+      // Fold any saved drafts and the final text into one undo step.
+      this.editor.preview(updateBubble(draft.base, id, { text }));
+      this.editor.commitFrom(draft.base);
+    } else if (text !== original && text !== bubble.text) {
+      // Only what the user typed: an untouched label must not overwrite text
+      // that changed meanwhile (e.g. adopted from another tab).
+      setText(this.editor, id, text);
+    }
     // Normalisation may differ from what was typed (e.g. trailing spaces).
     label.textContent = this.editor.map.nodes.get(id)?.text ?? text;
     this.scene.bubbleView(id)?.refit();

@@ -447,7 +447,24 @@ export class PointerController {
   private abort(): void {
     const g = this.gesture;
     this.gesture = null;
-    if (g?.kind === 'drag' || g?.kind === 'resize') this.editor.preview(g.before);
+    // Only undo our own preview; never roll back something newer (undo, another tab).
+    if ((g?.kind === 'drag' || g?.kind === 'resize') && this.editor.map === g.last) {
+      this.editor.preview(g.before);
+    }
+    this.cleanup();
+  }
+
+  /**
+   * Finishes an in-progress drag or resize as its own undo step. Called before
+   * any keyboard or toolbar command, so the command applies on top of the drag
+   * instead of recording the half-done preview as its undo point.
+   */
+  settle(): void {
+    const g = this.gesture;
+    if (g?.kind !== 'drag' && g?.kind !== 'resize') return;
+    if (g.kind === 'drag' && !g.moved) return; // a press, not yet a drag
+    this.gesture = null;
+    if (this.editor.map === g.last) this.editor.commitFrom(g.before);
     this.cleanup();
   }
 
@@ -485,6 +502,8 @@ export class PointerController {
     const chipEl =
       e.target instanceof Element ? e.target.closest<HTMLElement>('[data-chip]') : null;
     if (!chipEl) return;
+    // Keyboard activation (detail 0) had no pointerdown to settle animations.
+    if (e.detail === 0) this.hooks.interaction();
     const sole = this.editor.soleSelected;
     switch (chipEl.dataset.chip ?? '') {
       case 'pop':
@@ -500,7 +519,12 @@ export class PointerController {
       }
       case 'link':
         // Pointer taps are handled as gestures; this covers keyboard activation.
-        if (e.detail === 0 && sole !== null) this.editor.setConnect(true, sole);
+        if (e.detail === 0 && sole !== null) {
+          this.editor.setConnect(true, sole);
+          // The chip hides in connect mode; keep focus on the source bubble so
+          // arrows and Enter can pick the target.
+          this.scene.focusBubble(sole);
+        }
         break;
       default:
         break;

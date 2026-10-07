@@ -6,6 +6,13 @@
   touch-action: none;
   outline: none;
 }
+/* Focus lands here after Clear or a pop: frame the canvas so keyboard users can
+   see it (outlines draw over children and survive forced-colors mode). */
+.canvas:focus-visible {
+  outline: 3px solid rgba(29, 111, 191, 0.9);
+  outline-offset: -3px;
+  box-shadow: none;
+}
 .canvas.is-panning,
 .canvas.space-pan {
   cursor: grab;

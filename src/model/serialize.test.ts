@@ -93,6 +93,25 @@ describe('serialize / deserialize', () => {
     expect(map.links.size).toBe(1);
   });
 
+  it('keeps links apart for long node ids that share a prefix', () => {
+    const P = 'https://example.com/projects/mind-maps/2026/quarterly-planning/node-'; // 68 chars
+    const { map } = deserialize({
+      nodes: [
+        { id: 'root', x: 0, y: 0, text: 'root' },
+        { id: 'other', x: 0, y: 300, text: 'other' },
+        { id: `${P}alpha`, x: 300, y: 0, text: 'alpha' },
+        { id: `${P}beta`, x: 300, y: 300, text: 'beta' },
+      ],
+      links: [
+        { a: 'root', b: `${P}alpha` },
+        { a: 'other', b: `${P}beta` },
+      ],
+    });
+    const text = (id: string) => map.nodes.get(id)?.text;
+    const wires = [...map.links.values()].map((l) => [text(l.a), text(l.b)].sort().join('-'));
+    expect(wires.sort()).toEqual(['alpha-root', 'beta-other']);
+  });
+
   it('re-keys a link whose id collides after clipping', () => {
     const id = 'l'.repeat(70);
     const { map } = deserialize({
