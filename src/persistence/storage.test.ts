@@ -131,6 +131,47 @@ describe('Autosave', () => {
       autosave.destroy();
     });
 
+    it('saves an undo back to an adopted snapshot (only the adoption is an echo)', () => {
+      const storage = new MemoryStorage();
+      const editor = new Editor();
+      const autosave = new Autosave(editor, {
+        storage,
+        delay: 10,
+        onExternalChange: ({ map }) => editor.reset(map),
+      });
+      otherTabSaves(stringify(welcomeMap()));
+      const adopted = editor.map;
+      editor.commit(addBubble(editor.map, createBubble({ x: 999, y: 0 }, { id: 'extra' })));
+      vi.runAllTimers();
+      expect(storage.getItem(STORAGE_KEY)).toContain('"extra"');
+
+      editor.undo();
+      expect(editor.map).toBe(adopted);
+      vi.runAllTimers();
+      expect(storage.getItem(STORAGE_KEY)).not.toContain('"extra"');
+      autosave.destroy();
+    });
+
+    it('adopts another tab’s map even while a camera-only save is pending', () => {
+      const storage = new MemoryStorage();
+      const editor = new Editor();
+      const onExternalChange = vi.fn(({ map }: { map: typeof editor.map }) => editor.reset(map));
+      const autosave = new Autosave(editor, { storage, delay: 1000, onExternalChange });
+      editor.setViewport({ x: 7, y: 8, zoom: 1.5 }); // pending save, camera only
+      otherTabSaves(stringify(welcomeMap()));
+      expect(onExternalChange).toHaveBeenCalledOnce();
+
+      // The pending save now writes the adopted map, not our stale one.
+      vi.runAllTimers();
+      const saved = loadStoredMap(storage);
+      expect(saved.status).toBe('ok');
+      if (saved.status === 'ok') {
+        expect(saved.data.map.nodes.size).toBe(4);
+        expect(saved.data.viewport).toEqual({ x: 7, y: 8, zoom: 1.5 });
+      }
+      autosave.destroy();
+    });
+
     it('never discards unsaved local changes', () => {
       const storage = new MemoryStorage();
       const editor = new Editor();
@@ -146,7 +187,9 @@ describe('Autosave', () => {
       const editor = new Editor();
       const onExternalChange = vi.fn();
       const autosave = new Autosave(editor, { storage: new MemoryStorage(), onExternalChange });
-      window.dispatchEvent(new StorageEvent('storage', { key: 'other', newValue: '{}' }));
+      // A valid map under a foreign key must still be ignored.
+      const valid = stringify(welcomeMap());
+      window.dispatchEvent(new StorageEvent('storage', { key: 'other', newValue: valid }));
       otherTabSaves('{broken');
       expect(onExternalChange).not.toHaveBeenCalled();
       autosave.destroy();

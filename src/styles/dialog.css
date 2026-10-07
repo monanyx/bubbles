@@ -72,6 +72,9 @@
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
     0 0 10px rgba(255, 120, 90, 0.9);
 }
+.window-close:focus-visible {
+  box-shadow: var(--focus-ring);
+}
 .window-close .icon {
   width: 13px;
   height: 13px;

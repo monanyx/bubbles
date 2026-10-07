@@ -56,14 +56,13 @@ test('dragging moves a bubble as one undo step', async ({ page }) => {
   const tip = bubble(page, 'Press ?');
   const start = await center(tip);
   await drag(page, start, { x: start.x + 120, y: start.y + 90 });
-  const moved = await center(tip);
-  expect(moved.x - start.x).toBeCloseTo(120, -1);
-  expect(moved.y - start.y).toBeCloseTo(90, -1);
+  // The scene renders on the next animation frame, so poll rather than read once.
+  await expect.poll(async () => (await center(tip)).x - start.x).toBeCloseTo(120, -1);
+  await expect.poll(async () => (await center(tip)).y - start.y).toBeCloseTo(90, -1);
 
   await page.locator('[data-command="undo"]').click();
-  const back = await center(tip);
-  expect(back.x).toBeCloseTo(start.x, 0);
-  expect(back.y).toBeCloseTo(start.y, 0);
+  await expect.poll(async () => (await center(tip)).x).toBeCloseTo(start.x, 0);
+  await expect.poll(async () => (await center(tip)).y).toBeCloseTo(start.y, 0);
 });
 
 test('Delete pops the selection and the toast can undo it', async ({ page }) => {

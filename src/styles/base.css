@@ -37,7 +37,10 @@ button {
 }
 
 :focus-visible {
-  outline: none;
+  /* Invisible normally, but forced-colors (High Contrast) mode repaints it in a
+     system colour — box-shadow alone disappears there. */
+  outline: 2px solid transparent;
+  outline-offset: 2px;
   box-shadow: var(--focus-ring);
 }
 

@@ -48,7 +48,9 @@ test('the map survives a reload', async ({ page }) => {
 });
 
 test('a corrupted save falls back to the welcome map with a warning', async ({ page }) => {
-  await page.evaluate(() => localStorage.setItem('aero-bubbles:map', '{not json'));
+  // Written by an init script, i.e. after the old page (and its pagehide
+  // autosave flush) is gone, so nothing can overwrite it before the load.
+  await page.addInitScript(() => localStorage.setItem('aero-bubbles:map', '{not json'));
   await page.reload();
   await expect(bubbles(page)).toHaveCount(4);
   await expect(status(page)).toContainText("couldn't be read");

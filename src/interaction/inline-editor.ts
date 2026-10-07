@@ -1,6 +1,6 @@
 import { addChild, setText } from '../core/actions';
 import type { Editor, EditorState } from '../core/editor';
-import { MAX_TEXT_LENGTH, normalizeText } from '../model/map';
+import { clipText, MAX_TEXT_LENGTH, normalizeText } from '../model/map';
 import type { NodeId } from '../model/types';
 import type { Scene } from '../view/scene';
 
@@ -8,6 +8,10 @@ import type { Scene } from '../view/scene';
  * Turns a bubble label into an editable field while `state.editing` points at
  * it, and writes the text back into the document (one undo step) when editing
  * ends — however it ends: Enter, Escape, Tab, a click elsewhere, or blur.
+ * Text typed so far is also saved if the page is hidden or closed mid-edit.
+ *
+ * Construct it before {@link Autosave}: its pagehide/visibilitychange
+ * listeners must commit the draft before Autosave's listeners flush.
  */
 export class InlineEditor {
   private active: { id: NodeId; label: HTMLElement } | null = null;
@@ -16,16 +20,35 @@ export class InlineEditor {
   constructor(
     private readonly editor: Editor,
     private readonly scene: Scene,
+    /** Called with each child sprouted by Tab, e.g. to scroll it into view. */
+    private readonly onSprout: (id: NodeId) => void = () => undefined,
   ) {
     this.unsubscribe = editor.subscribe((state, prev) => {
       if (state.editing !== prev.editing) this.sync(state);
     });
+    window.addEventListener('pagehide', this.commitDraft);
+    document.addEventListener('visibilitychange', this.onVisibility);
   }
 
   destroy(): void {
     this.end();
     this.unsubscribe();
+    window.removeEventListener('pagehide', this.commitDraft);
+    document.removeEventListener('visibilitychange', this.onVisibility);
   }
+
+  /** Saves what has been typed so far without leaving edit mode. */
+  private readonly commitDraft = (): void => {
+    const active = this.active;
+    const bubble = active && this.editor.map.nodes.get(active.id);
+    if (!active || !bubble) return;
+    const text = normalizeText(active.label.innerText);
+    if (text !== bubble.text) setText(this.editor, active.id, text);
+  };
+
+  private readonly onVisibility = (): void => {
+    if (document.visibilityState === 'hidden') this.commitDraft();
+  };
 
   private sync(state: EditorState): void {
     this.end();
@@ -98,7 +121,8 @@ export class InlineEditor {
       e.preventDefault();
       e.stopPropagation();
       this.editor.stopEditing();
-      addChild(this.editor, id);
+      const child = addChild(this.editor, id);
+      if (child !== null) this.onSprout(child);
     }
   };
 
@@ -119,8 +143,11 @@ export class InlineEditor {
     if (!this.active) return;
     e.preventDefault();
     const text = (e.clipboardData?.getData('text/plain') ?? '').replace(/\r\n?/g, '\n');
-    const room = MAX_TEXT_LENGTH - this.active.label.innerText.length;
-    insertText(text.slice(0, Math.max(0, room)));
+    // The pasted text replaces the selection, so that doesn't count as used.
+    const selected = window.getSelection()?.toString().length ?? 0;
+    const room = MAX_TEXT_LENGTH - (this.active.label.innerText.length - selected);
+    const fitted = clipText(text, Math.max(0, room));
+    if (fitted || selected) insertText(fitted);
   };
 
   private readonly onBlur = (): void => {

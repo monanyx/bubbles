@@ -285,7 +285,11 @@ export class Scene {
 
   private syncLinks(state: EditorState): void {
     for (const link of state.map.links.values()) {
-      if (this.links.has(link.id)) continue;
+      // Links are immutable: the same object means the same endpoints. A new
+      // object under a known id (a reopened file reusing ids) needs a new view.
+      const existing = this.links.get(link.id);
+      if (existing?.link === link) continue;
+      existing?.group.remove();
       const view = new LinkView(link);
       this.links.set(link.id, view);
       this.linkLayer.append(view.group);
@@ -347,7 +351,10 @@ export class Scene {
     if (!this.cutButton.hidden) {
       const [linkId] = this.editor.state.selection.links;
       const link = linkId === undefined ? undefined : this.links.get(linkId);
-      if (link) this.cutButton.style.translate = `${link.mid.x}px ${link.mid.y}px`;
+      // Keep the -50% centring that the inline value would otherwise replace.
+      if (link) {
+        this.cutButton.style.translate = `calc(${link.mid.x}px - 50%) calc(${link.mid.y}px - 50%)`;
+      }
     }
   }
 }

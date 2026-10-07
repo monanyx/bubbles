@@ -162,6 +162,13 @@
   -webkit-user-select: text;
   caret-color: #fff;
 }
+/* The caret marks the field; a box-shadow ring would draw a rectangle inside
+   the circle. The transparent outline still shows in forced-colors mode. */
+.label:focus-visible {
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  box-shadow: none;
+}
 .bubble.is-editing .label:empty::before {
   content: '';
 }
@@ -270,6 +277,9 @@
 .chip .icon {
   width: 14px;
   height: 14px;
+}
+.chip:focus-visible {
+  box-shadow: var(--focus-ring);
 }
 .chip:hover {
   filter: brightness(1.08);

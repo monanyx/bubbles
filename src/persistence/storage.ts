@@ -57,7 +57,9 @@ export interface AutosaveOptions {
 export class Autosave {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private failed = false;
-  /** A map adopted from another tab; saving it back would only echo. */
+  /** The document (not just the camera) has changes not yet written. */
+  private mapDirty = false;
+  /** A map just adopted from another tab; saving it back would only echo. */
   private adopted: LoadedMap['map'] | null = null;
   private readonly unsubscribe: () => void;
 
@@ -67,9 +69,14 @@ export class Autosave {
   ) {
     this.unsubscribe = editor.subscribe((state, prev) => {
       const mapChanged = state.map !== prev.map;
-      if (!mapChanged && state.viewport === prev.viewport) return;
-      if (mapChanged && state.map === this.adopted && state.viewport === prev.viewport) return;
-      this.schedule();
+      const viewportChanged = state.viewport !== prev.viewport;
+      if (!mapChanged && !viewportChanged) return;
+      // Only the adoption itself is an echo. Returning to that same snapshot
+      // later (undo, redo) is a real change and must be saved.
+      const echo = mapChanged && state.map === this.adopted;
+      if (mapChanged) this.adopted = null;
+      if (mapChanged && !echo) this.mapDirty = true;
+      if (!echo || viewportChanged) this.schedule();
     });
     document.addEventListener('visibilitychange', this.onVisibility);
     window.addEventListener('pagehide', this.flush);
@@ -93,6 +100,7 @@ export class Autosave {
     try {
       const { map, viewport } = this.editor.state;
       storage.setItem(STORAGE_KEY, stringify(map, viewport));
+      this.mapDirty = false;
       this.failed = false;
     } catch (error) {
       if (!this.failed) this.options.onError?.(error);
@@ -112,7 +120,9 @@ export class Autosave {
   private readonly onStorage = (e: StorageEvent): void => {
     const { onExternalChange } = this.options;
     if (e.key !== STORAGE_KEY || e.newValue === null || !onExternalChange) return;
-    if (this.timer !== undefined) return; // our own pending edits win
+    // Our own unsaved edits win. A pending save that only moved the camera
+    // must not block (and later overwrite) another tab's newer document.
+    if (this.mapDirty) return;
     let data: LoadedMap;
     try {
       data = deserialize(e.newValue);

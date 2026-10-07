@@ -9,6 +9,7 @@ import {
   deleteSelection,
   duplicateSelection,
   nudgeSelection,
+  pickConnectTarget,
   selectAll,
   setColor,
   setText,
@@ -122,6 +123,20 @@ describe('actions', () => {
     expect(editor.state.editing).toBe(child);
     editor.undo();
     expect(editor.map.nodes.has(child)).toBe(false);
+  });
+
+  it('pickConnectTarget walks source → target and reports the outcome', () => {
+    const editor = seeded();
+    const c = createBubbleAt(editor, { x: 0, y: 400 });
+    editor.setConnect(true);
+    expect(pickConnectTarget(editor, 'a')).toBe('source');
+    expect(editor.state.connect.source).toBe('a');
+    expect(pickConnectTarget(editor, 'a')).toBe('cleared');
+    expect(pickConnectTarget(editor, 'a')).toBe('source');
+    expect(pickConnectTarget(editor, 'b')).toBe('exists'); // a–b already linked
+    expect(pickConnectTarget(editor, 'a')).toBe('source');
+    expect(pickConnectTarget(editor, c)).toBe('connected');
+    expect(editor.state.connect).toEqual({ active: true, source: null });
   });
 
   it('connect refuses duplicates', () => {

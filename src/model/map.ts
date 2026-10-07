@@ -10,12 +10,25 @@ export const MAX_TEXT_LENGTH = 200;
 export const clampDiameter = (d: number): number =>
   Math.round(Math.min(MAX_DIAMETER, Math.max(MIN_DIAMETER, d)));
 
+/**
+ * Cuts `text` to at most `max` UTF-16 units without splitting a surrogate
+ * pair: a lone half of an emoji is not valid Unicode and breaks encoders such
+ * as `encodeURIComponent` (used by the PNG export).
+ */
+export function clipText(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const clipped = text.slice(0, Math.max(0, max));
+  return /[\uD800-\uDBFF]$/.test(clipped) ? clipped.slice(0, -1) : clipped;
+}
+
 export const normalizeText = (text: string): string =>
-  text
-    .replace(/\r\n?/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-    .slice(0, MAX_TEXT_LENGTH);
+  clipText(
+    text
+      .replace(/\r\n?/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim(),
+    MAX_TEXT_LENGTH,
+  );
 
 export function emptyMap(): MindMap {
   return { nodes: new Map(), links: new Map() };

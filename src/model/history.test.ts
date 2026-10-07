@@ -52,10 +52,11 @@ describe('History', () => {
 
   it('does not coalesce across an undo', () => {
     const h = new History<number>(100, 1000, () => 0);
-    h.record(0, { coalesce: 'k' });
-    h.undo(1);
-    h.record(0, { coalesce: 'k' });
-    h.record(1, { coalesce: 'k' });
-    expect(h.undo(2)).toBe(0);
+    h.record(0); // 0 → 1, a separate step
+    h.record(1, { coalesce: 'k' }); // 1 → 2
+    expect(h.undo(2)).toBe(1); // back at 1; history still holds 0
+    h.record(1, { coalesce: 'k' }); // 1 → 3: same key, but after an undo
+    expect(h.undo(3)).toBe(1); // its own step, not merged away
+    expect(h.undo(1)).toBe(0);
   });
 });

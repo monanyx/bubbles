@@ -155,7 +155,9 @@ export class KeyboardController {
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     if (e.defaultPrevented || e.isComposing || isTypingTarget(e.target)) return;
     if (document.querySelector('dialog[open]')) return;
-    if ((e.key === 'Enter' || e.key === ' ') && isControl(e.target)) return;
+    // Controls keep their native keys: Enter/Space activate them, and Tab must
+    // always move focus (never sprout a bubble from a focused toolbar button).
+    if ((e.key === 'Enter' || e.key === ' ' || e.key === 'Tab') && isControl(e.target)) return;
 
     const arrow = ARROWS[e.key];
     if (arrow && !e.altKey && !e.ctrlKey && !e.metaKey) {

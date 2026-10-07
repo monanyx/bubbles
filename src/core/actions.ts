@@ -49,6 +49,28 @@ export function connect(editor: Editor, a: NodeId, b: NodeId): boolean {
   return true;
 }
 
+export type ConnectPick = 'source' | 'cleared' | 'connected' | 'exists';
+
+/**
+ * One step of connect mode: the first bubble picked becomes the source, the
+ * next one is wired to it. Picking the source again clears it. Shared by
+ * pointer taps and keyboard selection so both behave identically.
+ */
+export function pickConnectTarget(editor: Editor, id: NodeId): ConnectPick {
+  const { source } = editor.state.connect;
+  if (source === null) {
+    editor.setConnect(true, id);
+    return 'source';
+  }
+  if (source === id) {
+    editor.setConnect(true, null);
+    return 'cleared';
+  }
+  const ok = connect(editor, source, id);
+  editor.setConnect(true, null);
+  return ok ? 'connected' : 'exists';
+}
+
 export interface Removed {
   nodes: number;
   links: number;

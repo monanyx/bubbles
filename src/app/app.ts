@@ -2,6 +2,7 @@ import { createBubbleAt, nudgeSelection, setColor } from '../core/actions';
 import { Editor, type EditorState } from '../core/editor';
 import { navigate } from '../geometry/layout';
 import { panBy } from '../geometry/viewport';
+import { bindBubbleKeys } from '../interaction/bubble-keys';
 import { InlineEditor } from '../interaction/inline-editor';
 import { KeyboardController, shortcutFor, type CommandMap } from '../interaction/keyboard';
 import { PointerController } from '../interaction/pointer';
@@ -54,7 +55,21 @@ export function mountApp(doc: Document = document): Editor {
   const commands = createCommands({ editor, scene, status, colors, help });
   commandMap = commands.map;
 
-  new InlineEditor(editor, scene);
+  const announceConnect = (ok: boolean): void =>
+    status.toast(ok ? 'Connected!' : 'Those bubbles are already connected');
+  // A toast's Undo must not outlive the edit it announces.
+  editor.subscribe((state, prev) => {
+    if (state.map !== prev.map) status.dropAction();
+  });
+
+  // Before Autosave (below): it must commit a half-typed label on pagehide
+  // before Autosave flushes.
+  new InlineEditor(editor, scene, (id) => commands.reveal(id));
+
+  bindBubbleKeys(scene, editor, {
+    connected: announceConnect,
+    reveal: (id) => commands.reveal(id),
+  });
 
   new PointerController(scene, editor, {
     interaction: () => {
@@ -66,9 +81,13 @@ export function mountApp(doc: Document = document): Editor {
     cut: (id) => commands.cutLink(id),
     pickColor: (id, anchor) => {
       const bubble = editor.map.nodes.get(id);
-      if (bubble) colors.open(anchor, bubble.color, (color) => setColor(editor, [id], color));
+      if (!bubble) return;
+      colors.open(anchor, bubble.color, (color) => {
+        commands.settle(); // a tidy in flight would otherwise overwrite the change
+        setColor(editor, [id], color);
+      });
     },
-    connected: (ok) => status.toast(ok ? 'Connected!' : 'Those bubbles are already connected'),
+    connected: announceConnect,
     sprouted: () => undefined,
   });
 
@@ -97,7 +116,9 @@ export function mountApp(doc: Document = document): Editor {
     return true;
   });
 
-  bindCommandButtons(doc.body, commands.map, editor);
+  bindCommandButtons(doc.body, commands.map, editor, () =>
+    scene.root.focus({ preventScroll: true }),
+  );
   new MenuButton(required(doc, '#file-button'), required(doc, '#file-menu'));
   bindToolbarArrows(required(doc, '.toolbar'));
   syncZoomLabel(editor, required(doc, '[data-command="zoom-reset"]'));

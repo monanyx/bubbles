@@ -1,4 +1,4 @@
-import { addChild, connect } from '../core/actions';
+import { addChild, connect, pickConnectTarget } from '../core/actions';
 import type { Editor } from '../core/editor';
 import { panBy, zoomAt } from '../geometry/viewport';
 import { bubblesInRect, moveBubbles, updateBubble } from '../model/map';
@@ -31,12 +31,21 @@ type Gesture =
       start: Vec;
       startWorld: Vec;
       before: MindMap;
+      /** The map this gesture last previewed; anything else means someone else edited. */
+      last: MindMap;
       moved: boolean;
       wasSole: boolean;
       additive: boolean;
       ids: NodeId[];
     }
-  | { kind: 'resize'; pointerId: number; id: NodeId; before: MindMap; grip: number }
+  | {
+      kind: 'resize';
+      pointerId: number;
+      id: NodeId;
+      before: MindMap;
+      last: MindMap;
+      grip: number;
+    }
   | { kind: 'connect'; pointerId: number; source: NodeId; start: Vec; moved: boolean }
   | { kind: 'link'; pointerId: number; id: LinkId; start: Vec; additive: boolean }
   | { kind: 'pinch'; startDistance: number; startMid: Vec; origin: Viewport };
@@ -138,6 +147,7 @@ export class PointerController {
           pointerId: e.pointerId,
           id: sole,
           before: this.editor.map,
+          last: this.editor.map,
           grip: 2 * Math.hypot(world.x - bubble.x, world.y - bubble.y) - bubble.d,
         };
       }
@@ -157,6 +167,7 @@ export class PointerController {
         start: point,
         startWorld: this.scene.toWorld(point),
         before: this.editor.map,
+        last: this.editor.map,
         moved: false,
         wasSole: this.editor.soleSelected === id,
         additive,
@@ -253,6 +264,7 @@ export class PointerController {
         return;
       }
       case 'drag': {
+        if (this.superseded(g)) return;
         if (!g.moved) {
           if (distance(point, g.start) < TAP_SLOP) return;
           g.moved = true;
@@ -260,17 +272,18 @@ export class PointerController {
           this.scene.setDragging(g.ids);
         }
         const world = this.scene.toWorld(point);
-        this.editor.preview(
-          moveBubbles(g.before, g.ids, world.x - g.startWorld.x, world.y - g.startWorld.y),
-        );
+        g.last = moveBubbles(g.before, g.ids, world.x - g.startWorld.x, world.y - g.startWorld.y);
+        this.editor.preview(g.last);
         return;
       }
       case 'resize': {
+        if (this.superseded(g)) return;
         const bubble = g.before.nodes.get(g.id);
         if (!bubble) return;
         const world = this.scene.toWorld(point);
         const d = 2 * Math.hypot(world.x - bubble.x, world.y - bubble.y) - g.grip;
-        this.editor.preview(updateBubble(g.before, g.id, { d }));
+        g.last = updateBubble(g.before, g.id, { d });
+        this.editor.preview(g.last);
         return;
       }
       case 'connect': {
@@ -296,6 +309,18 @@ export class PointerController {
       }
     }
   };
+
+  /**
+   * True (and the gesture is dropped) when something else changed the document
+   * mid-gesture — an undo, a Delete, another tab. Previewing or committing from
+   * the stale `before` snapshot would silently revert that change.
+   */
+  private superseded(g: { last: MindMap }): boolean {
+    if (this.editor.map === g.last) return false;
+    this.gesture = null;
+    this.cleanup();
+    return true;
+  }
 
   /** Which bubbles a drag should carry along. */
   private dragSet(id: NodeId, additive: boolean): NodeId[] {
@@ -333,19 +358,20 @@ export class PointerController {
         this.scene.setMarquee(null);
         return;
       case 'drag':
-        if (g.moved) {
+        if (!g.moved) {
+          this.tapBubble(g.id, g.wasSole, g.additive);
+        } else if (!this.superseded(g)) {
           this.scene.setDragging([]);
           this.editor.commitFrom(g.before);
-        } else {
-          this.tapBubble(g.id, g.wasSole, g.additive);
         }
         return;
       case 'resize':
-        this.editor.commitFrom(g.before);
+        if (!this.superseded(g)) this.editor.commitFrom(g.before);
         return;
       case 'connect': {
         this.scene.setTempWire(null);
         this.scene.setDropTarget(null);
+        if (!this.editor.map.nodes.has(g.source)) return; // popped mid-gesture
         if (!g.moved) {
           this.editor.setConnect(true, g.source);
           return;
@@ -393,16 +419,9 @@ export class PointerController {
   }
 
   private tapBubble(id: NodeId, wasSole: boolean, additive: boolean): void {
-    const { connect: mode } = this.editor.state;
-    if (mode.active) {
-      if (mode.source === null) {
-        this.editor.setConnect(true, id);
-      } else if (mode.source !== id) {
-        this.hooks.connected(connect(this.editor, mode.source, id));
-        this.editor.setConnect(true, null);
-      } else {
-        this.editor.setConnect(true, null);
-      }
+    if (this.editor.state.connect.active) {
+      const pick = pickConnectTarget(this.editor, id);
+      if (pick === 'connected' || pick === 'exists') this.hooks.connected(pick === 'connected');
       return;
     }
     if (additive) this.editor.toggleNode(id);
@@ -418,8 +437,8 @@ export class PointerController {
     const g = this.gesture;
     if (!g || (g.kind !== 'pinch' && g.pointerId !== e.pointerId)) return;
     // Keep whatever the user saw; the platform interrupted, not the user.
-    if (g.kind === 'drag' && g.moved) this.editor.commitFrom(g.before);
-    if (g.kind === 'resize') this.editor.commitFrom(g.before);
+    const keep = (g.kind === 'drag' && g.moved) || g.kind === 'resize';
+    if (keep && this.editor.map === g.last) this.editor.commitFrom(g.before);
     this.gesture = null;
     this.cleanup();
   };
@@ -496,12 +515,19 @@ export class PointerController {
   /* -------------------------------------------------------- space to pan */
 
   private readonly onKey = (e: KeyboardEvent): void => {
-    if (e.key !== ' ' || isTypingTarget(e.target) || isControl(e.target)) return;
-    const held = e.type === 'keydown';
-    if (held) e.preventDefault();
-    if (held === this.spaceHeld) return;
-    this.spaceHeld = held;
-    this.root.classList.toggle('space-pan', held);
+    if (e.key !== ' ') return;
+    // Always honour the release, wherever focus went while Space was held
+    // (a new bubble's label, a toolbar button…), or pan mode would stick.
+    if (e.type === 'keyup') {
+      this.spaceHeld = false;
+      this.root.classList.remove('space-pan');
+      return;
+    }
+    if (e.defaultPrevented || isTypingTarget(e.target) || isControl(e.target)) return;
+    e.preventDefault();
+    if (this.spaceHeld) return;
+    this.spaceHeld = true;
+    this.root.classList.add('space-pan');
   };
 
   private readonly onWindowBlur = (): void => {

@@ -7,6 +7,7 @@ import {
   emptyMap,
   moveBubbles,
   removeBubbles,
+  removeLinks,
 } from '../model/map';
 import type { MindMap } from '../model/types';
 import { Scene } from './scene';
@@ -90,6 +91,18 @@ describe('Scene', () => {
     scene.flush();
     expect(root.querySelector('[data-link-id="ab"]')?.classList.contains('is-selected')).toBe(true);
     expect(root.querySelector<HTMLElement>('.link-cut')?.hidden).toBe(false);
+  });
+
+  it('redraws a wire whose id now joins different bubbles (reopened file)', () => {
+    let map = addBubble(editor.map, createBubble({ x: 0, y: 400 }, { id: 'c' }));
+    map = removeLinks(map, ['ab']);
+    map = addLink(map, 'a', 'c', 'ab').map; // same id, new endpoints
+    const before = root.querySelector('[data-link-id="ab"] .link-core')?.getAttribute('d');
+    editor.commit(map);
+    scene.flush();
+    const paths = root.querySelectorAll('[data-link-id="ab"]');
+    expect(paths).toHaveLength(1);
+    expect(paths[0]?.querySelector('.link-core')?.getAttribute('d')).not.toBe(before);
   });
 
   it('hit-tests bubbles in world space', () => {

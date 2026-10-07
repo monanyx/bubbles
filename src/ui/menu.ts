@@ -19,6 +19,10 @@ export class MenuButton {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         this.open(true, e.key === 'ArrowUp' ? -1 : 0);
+      } else if (e.key === 'Escape' && this.isOpen) {
+        e.preventDefault();
+        e.stopPropagation(); // closing the menu shouldn't also clear the selection
+        this.close();
       }
     });
     menu.addEventListener('keydown', this.onMenuKey);
@@ -42,7 +46,7 @@ export class MenuButton {
       this.button.setAttribute('aria-expanded', 'true');
       document.addEventListener('pointerdown', this.onOutside, true);
     }
-    if (focusItem) this.items.at(index)?.focus();
+    if (focusItem) this.focusFrom(index, index < 0 ? -1 : 1);
   }
 
   close(restoreFocus = false): void {
@@ -58,24 +62,41 @@ export class MenuButton {
     if (!this.menu.contains(target) && !this.button.contains(target)) this.close();
   };
 
+  /** Focuses the first enabled item from `start`, stepping (and wrapping) by `step`. */
+  private focusFrom(start: number, step: 1 | -1): void {
+    const n = this.items.length;
+    for (let i = 0; i < n; i++) {
+      const item = this.items.at((start + step * i) % n);
+      if (item && !(item instanceof HTMLButtonElement && item.disabled)) {
+        item.focus();
+        return;
+      }
+    }
+  }
+
   private readonly onMenuKey = (e: KeyboardEvent): void => {
     const index = this.items.indexOf(document.activeElement as HTMLElement);
-    const move = (to: number): void => {
+    const move = (to: number, step: 1 | -1): void => {
       e.preventDefault();
-      this.items.at(to % this.items.length)?.focus();
+      this.focusFrom(to, step);
     };
     switch (e.key) {
       case 'ArrowDown':
-        move(index + 1);
+        move(index + 1, 1);
         break;
       case 'ArrowUp':
-        move(index - 1);
+        move(index - 1, -1);
         break;
       case 'Home':
-        move(0);
+        move(0, 1);
         break;
       case 'End':
-        move(-1);
+        move(-1, -1);
+        break;
+      case 'ArrowLeft':
+      case 'ArrowRight':
+        // Keep these inside the menu instead of panning or hopping bubbles.
+        e.preventDefault();
         break;
       case 'Escape':
         e.preventDefault();

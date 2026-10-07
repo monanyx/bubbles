@@ -53,6 +53,16 @@ export class StatusBar {
     this.timer = setTimeout(() => this.restore(), duration);
   }
 
+  /**
+   * Withdraws the current toast's action (e.g. "Undo") once it no longer
+   * applies — after a later edit it would undo something else.
+   */
+  dropAction(): void {
+    if (!this.action) return;
+    this.action = undefined;
+    this.button.hidden = true;
+  }
+
   get message(): string {
     return this.text.textContent;
   }

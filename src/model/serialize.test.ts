@@ -62,6 +62,53 @@ describe('serialize / deserialize', () => {
     expect(() => deserialize(input)).toThrow(message);
   });
 
+  it('loads thousands of links quickly (linear, not quadratic)', () => {
+    const nodes = Array.from({ length: 5000 }, (_, i) => ({ id: `n${i}`, x: i, y: 0 }));
+    // 19k distinct pairs {x, x+k} for k = 1..4.
+    const links = Array.from({ length: 19_000 }, (_, i) => ({
+      id: `l${i}`,
+      a: `n${i % 5000}`,
+      b: `n${((i % 5000) + 1 + Math.floor(i / 5000)) % 5000}`,
+    }));
+    const started = performance.now();
+    const { map } = deserialize({ nodes, links });
+    expect(performance.now() - started).toBeLessThan(1500);
+    expect(map.links.size).toBe(19_000);
+  });
+
+  it('rejects absurd link counts', () => {
+    const links = Array.from({ length: 20_001 }, () => ({ a: 'x', b: 'y' }));
+    expect(() => deserialize({ nodes: [], links })).toThrow('Too many connections');
+  });
+
+  it('matches links to node ids that were clipped for length', () => {
+    const long = 'n'.repeat(100);
+    const { map } = deserialize({
+      nodes: [
+        { id: long, x: 0, y: 0 },
+        { id: 'b', x: 300, y: 0 },
+      ],
+      links: [{ id: 'l', a: long, b: 'b' }],
+    });
+    expect(map.links.size).toBe(1);
+  });
+
+  it('re-keys a link whose id collides after clipping', () => {
+    const id = 'l'.repeat(70);
+    const { map } = deserialize({
+      nodes: [
+        { id: 'a', x: 0, y: 0 },
+        { id: 'b', x: 300, y: 0 },
+        { id: 'c', x: 0, y: 300 },
+      ],
+      links: [
+        { id, a: 'a', b: 'b' },
+        { id: `${id}x`, a: 'a', b: 'c' },
+      ],
+    });
+    expect(map.links.size).toBe(2);
+  });
+
   it('ignores an invalid viewport', () => {
     expect(deserialize({ nodes: [], viewport: { x: 0, y: 0, zoom: -1 } }).viewport).toBeNull();
   });

@@ -165,7 +165,9 @@
   border-color: rgba(120, 180, 230, 0.9);
   background: linear-gradient(180deg, rgba(235, 246, 255, 1), rgba(200, 228, 250, 1));
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
-  outline: none;
+}
+.menu-item:focus-visible {
+  outline-offset: -2px;
 }
 .menu-item kbd {
   margin-left: auto;
@@ -208,11 +210,20 @@
 .swatch:hover {
   scale: 1.12;
 }
+.swatch:focus-visible {
+  box-shadow: var(--focus-ring);
+}
 .swatch[aria-checked='true'] {
   box-shadow:
     0 0 0 2px #fff,
     0 0 0 4px var(--swatch),
     0 2px 6px rgba(6, 38, 76, 0.35);
+}
+.swatch[aria-checked='true']:focus-visible {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px var(--swatch),
+    var(--focus-ring);
 }
 
 /* ====== Zoom controls ====== */

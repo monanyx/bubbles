@@ -1,14 +1,16 @@
 import { clampZoom } from '../geometry/viewport';
 import { linkId, nodeId } from './ids';
-import { addLink, clampDiameter, DEFAULT_DIAMETER, emptyMap, normalizeText } from './map';
+import { clampDiameter, DEFAULT_DIAMETER, normalizeText } from './map';
 import { DEFAULT_COLOR, isColorId } from './palette';
-import type { Bubble, MindMap, Viewport } from './types';
+import type { Bubble, Link, MindMap, Viewport } from './types';
 
 export const FORMAT = 'aero-bubbles';
 export const VERSION = 1;
 
-/** Keeps a hostile or corrupted file from freezing the tab. */
+/** Keep a hostile or corrupted file from freezing the tab. */
 const MAX_NODES = 5000;
+const MAX_LINKS = MAX_NODES * 4;
+const MAX_ID_LENGTH = 64;
 const COORD_LIMIT = 1e6;
 
 export interface SerializedBubble {
@@ -86,6 +88,9 @@ export function deserialize(input: unknown): LoadedMap {
   if (data.nodes.length > MAX_NODES) {
     throw new MapFormatError(`Too many bubbles (${data.nodes.length}; limit ${MAX_NODES}).`);
   }
+  if (Array.isArray(data.links) && data.links.length > MAX_LINKS) {
+    throw new MapFormatError(`Too many connections (${data.links.length}; limit ${MAX_LINKS}).`);
+  }
 
   const nodes = new Map<string, Bubble>();
   for (const raw of data.nodes) {
@@ -93,7 +98,8 @@ export function deserialize(input: unknown): LoadedMap {
     const x = finite(raw.x);
     const y = finite(raw.y);
     if (x === null || y === null) continue;
-    let id = typeof raw.id === 'string' && raw.id.length > 0 ? raw.id.slice(0, 64) : nodeId();
+    let id =
+      typeof raw.id === 'string' && raw.id.length > 0 ? raw.id.slice(0, MAX_ID_LENGTH) : nodeId();
     if (nodes.has(id)) id = nodeId();
     nodes.set(id, {
       id,
@@ -105,18 +111,25 @@ export function deserialize(input: unknown): LoadedMap {
     });
   }
 
-  let map: MindMap = { ...emptyMap(), nodes };
-  if (Array.isArray(data.links)) {
-    for (const raw of data.links) {
-      if (!isRecord(raw) || typeof raw.a !== 'string' || typeof raw.b !== 'string') continue;
-      const id =
-        typeof raw.id === 'string' && raw.id.length > 0 && !map.links.has(raw.id)
-          ? raw.id.slice(0, 64)
-          : linkId();
-      map = addLink(map, raw.a, raw.b, id).map;
-    }
+  // Built in one pass (not via addLink, which copies the map per call) so
+  // loading stays linear in the number of links.
+  const links = new Map<string, Link>();
+  const pairs = new Set<string>();
+  for (const raw of Array.isArray(data.links) ? data.links : []) {
+    if (!isRecord(raw) || typeof raw.a !== 'string' || typeof raw.b !== 'string') continue;
+    // Node ids were clipped the same way, so long ids still match up.
+    const a = raw.a.slice(0, MAX_ID_LENGTH);
+    const b = raw.b.slice(0, MAX_ID_LENGTH);
+    if (a === b || !nodes.has(a) || !nodes.has(b)) continue;
+    const pair = a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`;
+    if (pairs.has(pair)) continue;
+    pairs.add(pair);
+    let id = typeof raw.id === 'string' && raw.id.length > 0 ? raw.id.slice(0, MAX_ID_LENGTH) : '';
+    if (!id || links.has(id)) id = linkId();
+    links.set(id, { id, a, b });
   }
 
+  const map: MindMap = { nodes, links };
   return { map, viewport: parseViewport(data.viewport) };
 }
 

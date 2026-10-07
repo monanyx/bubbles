@@ -13,7 +13,7 @@ import { renderSvg } from '../export/svg';
 import { svgToPng } from '../export/png';
 import { centerOn, fitRect, screenToWorld, worldToScreen, zoomAt } from '../geometry/viewport';
 import type { Command, CommandId, CommandMap } from '../interaction/keyboard';
-import { bounds, clampDiameter, setPositions, updateBubbles } from '../model/map';
+import { bounds, clampDiameter, neighbors, setPositions, updateBubbles } from '../model/map';
 import { COLOR_IDS, PALETTE } from '../model/palette';
 import { deserialize, stringify } from '../model/serialize';
 import type { NodeId, Vec, Viewport } from '../model/types';
@@ -101,18 +101,65 @@ export function createCommands(ctx: AppContext): Commands {
     if (!inside) animateViewport(centerOn(bubble, width, height, view.zoom));
   };
 
-  const removeWithToast = (): void => {
+  /** The closest surviving bubble to `from`, preferring ones wired to it. */
+  const survivorNear = (from: NodeId, doomed: ReadonlySet<NodeId>): NodeId | null => {
+    const origin = editor.map.nodes.get(from);
+    if (!origin) return null;
+    const wired = new Set(neighbors(editor.map, from));
+    let best: NodeId | null = null;
+    let bestScore = Infinity;
+    for (const b of editor.map.nodes.values()) {
+      if (doomed.has(b.id)) continue;
+      const score = Math.hypot(b.x - origin.x, b.y - origin.y) + (wired.has(b.id) ? 0 : 1e6);
+      if (score < bestScore) {
+        bestScore = score;
+        best = b.id;
+      }
+    }
+    return best;
+  };
+
+  /**
+   * Pops the selection with an Undo toast. Focus never falls to <body>: with
+   * `moveFocus` (the Delete key) it moves to the nearest surviving bubble so
+   * keyboard users keep their place; otherwise it returns to the canvas.
+   */
+  const removeWithToast = (moveFocus = false): void => {
+    const hadFocus = scene.root.contains(document.activeElement);
+    const { nodes } = editor.state.selection;
+    const from = [...nodes].at(-1);
+    const next = moveFocus && from !== undefined ? survivorNear(from, nodes) : null;
+
     const removed = deleteSelection(editor);
     const parts: string[] = [];
     if (removed.nodes) parts.push(`Popped ${plural(removed.nodes, 'bubble')}`);
     if (removed.links) parts.push(`cut ${plural(removed.links, 'connection')}`);
     if (parts.length) status.toast(capitalize(parts.join(', ')), { action: undoAction() });
+
+    if (!hadFocus) return;
+    if (next !== null && editor.map.nodes.has(next)) {
+      editor.select([next]);
+      scene.focusBubble(next);
+    } else {
+      scene.root.focus({ preventScroll: true });
+    }
   };
 
-  const undoAction = (): { label: string; run: () => void } => ({
-    label: 'Undo',
-    run: () => editor.undo(),
-  });
+  /**
+   * "Undo" for a toast, bound to the edit it announces: call it right after
+   * that edit. It finishes running animations first (a tidy in flight would
+   * otherwise overwrite the undo) and does nothing once later edits followed.
+   */
+  const undoAction = (): { label: string; run: () => void } => {
+    const after = editor.map;
+    return {
+      label: 'Undo',
+      run: () => {
+        settle();
+        if (editor.map === after) editor.undo();
+      },
+    };
+  };
 
   const hasNodes = (): boolean => editor.map.nodes.size > 0;
   const hasSelectedNodes = (): boolean => editor.state.selection.nodes.size > 0;
@@ -200,7 +247,7 @@ export function createCommands(ctx: AppContext): Commands {
     delete: {
       label: 'Pop selected',
       enabled: () => editor.state.selection.nodes.size + editor.state.selection.links.size > 0,
-      run: removeWithToast,
+      run: () => removeWithToast(true),
     },
     connect: {
       label: 'Connect bubbles',

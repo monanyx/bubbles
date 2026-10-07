@@ -6,6 +6,7 @@ import {
   bubblesInRect,
   centralBubble,
   clampDiameter,
+  clipText,
   createBubble,
   duplicateBubbles,
   emptyMap,
@@ -22,6 +23,8 @@ import {
   updateBubble,
 } from './map';
 import type { MindMap } from './types';
+
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 
 function threeBubbles(): { map: MindMap; ids: [string, string, string] } {
   let map = emptyMap();
@@ -45,6 +48,14 @@ describe('normalizeText / clampDiameter', () => {
     expect(normalizeText('a\r\nb\rc')).toBe('a\nb\nc');
     expect(normalizeText('a\n\n\n\nb')).toBe('a\n\nb');
     expect(normalizeText('x'.repeat(500))).toHaveLength(MAX_TEXT_LENGTH);
+  });
+
+  it('never splits a surrogate pair when clipping', () => {
+    const text = `${'a'.repeat(199)}🎉`; // the emoji straddles the 200th unit
+    expect(clipText(text, 200)).toBe('a'.repeat(199));
+    expect(normalizeText(text)).not.toMatch(LONE_SURROGATE);
+    expect(clipText('🎉🎉', 2)).toBe('🎉');
+    expect(clipText('short', 200)).toBe('short');
   });
 
   it('clamps and rounds diameters', () => {

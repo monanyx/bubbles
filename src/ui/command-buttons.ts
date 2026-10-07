@@ -7,11 +7,15 @@ const isCommandId = (commands: CommandMap, id: string | undefined): id is Comman
 /**
  * Wires every `[data-command]` button under `root` to the command registry
  * and keeps `disabled` / `aria-pressed` in sync with editor state.
+ *
+ * A focused button that becomes disabled (Clear after clearing, Undo at the
+ * end of history) would drop focus to `<body>`; `fallbackFocus` catches it.
  */
 export function bindCommandButtons(
   root: ParentNode,
   commands: CommandMap,
   editor: Editor,
+  fallbackFocus: () => void = () => undefined,
 ): () => void {
   const buttons = [...root.querySelectorAll<HTMLButtonElement>('button[data-command]')].filter(
     (b) => isCommandId(commands, b.dataset.command),
@@ -34,11 +38,17 @@ export function bindCommandButtons(
   }
 
   const sync = (): void => {
+    let lostFocus = false;
     for (const button of buttons) {
       const command = commands[button.dataset.command as CommandId];
-      if (command.enabled) button.disabled = !command.enabled();
+      if (command.enabled) {
+        const disabled = !command.enabled();
+        if (disabled && !button.disabled && document.activeElement === button) lostFocus = true;
+        button.disabled = disabled;
+      }
       if (command.active) button.setAttribute('aria-pressed', String(command.active()));
     }
+    if (lostFocus) fallbackFocus();
   };
   sync();
   return editor.subscribe(sync);

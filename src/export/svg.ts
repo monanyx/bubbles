@@ -84,7 +84,10 @@ export function renderSvg(map: MindMap, options: SvgOptions = {}): RenderedSvg |
       [1, 'rgba(255,255,255,.5)'],
     ]),
     `<linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".85"/><stop offset=".55" stop-color="#fff" stop-opacity=".32"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>`,
-    `<filter id="bubble-shadow" ${region}>` +
+    // Filter regions are relative to each bubble (not the whole canvas) so the
+    // export cost grows with the number of bubbles, not bubbles × canvas area.
+    // Margins cover the blur (3σ = 33px) plus the 10px offset at d = 80.
+    `<filter id="bubble-shadow" x="-60%" y="-50%" width="220%" height="230%">` +
       `<feGaussianBlur in="SourceAlpha" stdDeviation="11"/><feOffset dy="10" result="s1"/>` +
       `<feFlood flood-color="rgb(6,38,76)" flood-opacity=".35"/><feComposite in2="s1" operator="in" result="c1"/>` +
       `<feGaussianBlur in="SourceAlpha" stdDeviation="3"/><feOffset dy="2" result="s2"/>` +
@@ -105,28 +108,36 @@ export function renderSvg(map: MindMap, options: SvgOptions = {}): RenderedSvg |
         [0.62, rgba(t.depth, 0)],
         [1, rgba(t.depth, 0.4)],
       ]),
-      `<filter id="ink-${id}" ${region}>` +
+      // Applied to the label box (≥ 51px), so ±30% covers the 15px glow.
+      `<filter id="ink-${id}" x="-30%" y="-30%" width="160%" height="160%">` +
         `<feGaussianBlur in="SourceAlpha" stdDeviation="5" result="gb"/><feFlood flood-color="${rgba(t.glow, 0.95)}"/><feComposite in2="gb" operator="in" result="glow"/>` +
         `<feGaussianBlur in="SourceAlpha" stdDeviation="1.5"/><feOffset dy="1" result="ib"/><feFlood flood-color="${rgba(t.ink, 0.85)}"/><feComposite in2="ib" operator="in" result="ink"/>` +
         `<feMerge><feMergeNode in="glow"/><feMergeNode in="ink"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`,
     );
   }
 
-  const wires: string[] = [];
+  const cores: string[] = [];
+  const glows: string[] = [];
   for (const link of map.links.values()) {
     const a = map.nodes.get(link.a);
     const b = map.nodes.get(link.b);
     if (!a || !b) continue;
     const g = linkGeometry({ x: a.x, y: a.y, r: a.d / 2 }, { x: b.x, y: b.y, r: b.d / 2 });
     if (!g.visible) continue;
-    wires.push(
-      `<path d="${g.path}" fill="none" stroke="url(#wire)" stroke-width="3" stroke-linecap="round" filter="url(#wire-shadow)"/>` +
-        `<path d="${g.path}" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1" stroke-linecap="round"/>`,
+    cores.push(
+      `<path d="${g.path}" fill="none" stroke="url(#wire)" stroke-width="3" stroke-linecap="round"/>`,
+    );
+    glows.push(
+      `<path d="${g.path}" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1" stroke-linecap="round"/>`,
     );
   }
+  // One shadow pass for all wires instead of one full-canvas pass per wire.
+  const wires = cores.length
+    ? `<g filter="url(#wire-shadow)">${cores.join('')}</g><g>${glows.join('')}</g>`
+    : '';
 
   const shapes = bubbles.map((bubble, i) => {
-    const { mask, body } = renderBubble(bubble, i, { x, y, width, height }, measure);
+    const { mask, body } = renderBubble(bubble, i, measure);
     defs.push(mask);
     return body;
   });
@@ -142,15 +153,17 @@ export function renderSvg(map: MindMap, options: SvgOptions = {}): RenderedSvg |
 
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${x} ${y} ${width} ${height}" font-family="${escapeAttr(FONT_STACK)}">` +
-    `<defs>${defs.join('')}</defs>${backdrop}<g>${wires.join('')}</g><g>${shapes.join('')}</g></svg>`;
+    `<defs>${defs.join('')}</defs>${backdrop}${wires}<g>${shapes.join('')}</g></svg>`;
 
   return { svg, width, height };
 }
 
+/** Room around a bubble for its drop shadow: 3σ (33px) + 10px offset. */
+const SHADOW_PAD = 50;
+
 function renderBubble(
   bubble: Bubble,
   index: number,
-  region: { x: number; y: number; width: number; height: number },
   measure: MeasureText,
 ): { mask: string; body: string } {
   const { x: cx, y: cy, d, color } = bubble;
@@ -158,11 +171,12 @@ function renderBubble(
   const c = `cx="${num(cx)}" cy="${num(cy)}" r="${num(r)}"`;
   const maskId = `m${index}`;
 
-  // Keep the drop shadow outside the circle, as CSS box-shadow does.
+  // Keep the drop shadow outside the circle, as CSS box-shadow does. The mask
+  // only spans this bubble's neighbourhood, never the whole export.
+  const box = `x="${num(cx - r - SHADOW_PAD)}" y="${num(cy - r - SHADOW_PAD)}" width="${num(d + SHADOW_PAD * 2)}" height="${num(d + SHADOW_PAD * 2 + 12)}"`;
   const mask =
-    `<mask id="${maskId}" maskUnits="userSpaceOnUse" x="${region.x}" y="${region.y}" width="${region.width}" height="${region.height}">` +
-    `<rect x="${region.x}" y="${region.y}" width="${region.width}" height="${region.height}" fill="#fff"/>` +
-    `<circle ${c} fill="#000"/></mask>`;
+    `<mask id="${maskId}" maskUnits="userSpaceOnUse" ${box}>` +
+    `<rect ${box} fill="#fff"/><circle ${c} fill="#000"/></mask>`;
 
   // CSS gloss: left 9%, top 4%, 82%×46%, border-radius 50% / 58% (scaled to fit).
   const gw = d * 0.82;
@@ -197,7 +211,14 @@ function renderLabel(bubble: Bubble, measure: MeasureText): string {
         `<tspan x="${num(bubble.x)}" y="${num(top + i * lineHeight)}">${escapeText(line)}</tspan>`,
     )
     .join('');
-  return `<text font-size="${fontSize}" font-weight="600" fill="#fff" text-anchor="middle" dominant-baseline="central" filter="url(#ink-${bubble.color})">${tspans}</text>`;
+  // The invisible rect gives the filter a predictable box (the label area),
+  // so even a one-letter label gets room for its glow.
+  const half = box / 2;
+  const area = `<rect x="${num(bubble.x - half)}" y="${num(bubble.y - half)}" width="${num(box)}" height="${num(box)}" fill="none"/>`;
+  return (
+    `<g filter="url(#ink-${bubble.color})">${area}` +
+    `<text font-size="${fontSize}" font-weight="600" fill="#fff" text-anchor="middle" dominant-baseline="central">${tspans}</text></g>`
+  );
 }
 
 /** Greedy word wrap honouring explicit newlines; over-long words break anywhere. */

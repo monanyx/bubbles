@@ -14,11 +14,13 @@ export const status = (page: Page): Locator => page.locator('.status-text');
 export const toastAction = (page: Page, name: string): Locator =>
   page.locator('.status').getByRole('button', { name });
 
-/** Opens the app with an empty store so every test starts from the welcome map. */
+/**
+ * Opens the app on the welcome map. Every test gets a fresh browser context,
+ * so storage starts empty; clearing and reloading here would race the app's
+ * own debounced first save (flushed on pagehide).
+ */
 export async function freshStart(page: Page): Promise<void> {
   await page.goto('/');
-  await page.evaluate(() => localStorage.clear());
-  await page.reload();
   await expect(bubbles(page)).toHaveCount(4);
 }
 
